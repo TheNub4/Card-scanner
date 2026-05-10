@@ -20,7 +20,13 @@ from ui_helpers import (
     get_domain_label,
 )
 st.set_page_config(page_title="PackTrack", layout="wide")
-
+from league_page import (
+    render_league_page,
+    ensure_league_tables,
+    seed_round_robin_schedule,
+    get_matches,
+    calculate_standings,
+)
 from db import (
     PLAYERS,
     PACK_SCHEDULE,
@@ -203,6 +209,51 @@ def sync_master_database(set_id):
 def sync_all_sets():
     return db_sync_all_sets(conn, c)
 
+def render_dashboard_league_summary():
+    ensure_league_tables(conn, c)
+    seed_round_robin_schedule(conn, c)
+
+    current_week = int(get_setting("current_week", "1"))
+    matches = get_matches(c)
+    standings = calculate_standings(c)
+
+    current_week_matches = [
+        match for match in matches
+        if match[1] == current_week
+    ]
+
+    completed_matches = [
+        match for match in matches
+        if match[6] is not None
+    ]
+
+    st.subheader("League Summary")
+    st.write(f"**Current Week:** Week {current_week}")
+
+    st.write("**This Week’s Matchups:**")
+    for match in current_week_matches:
+        player1_name = match[2]
+        player2_name = match[3]
+        winner_id = match[6]
+        player1_id = match[4]
+        player2_id = match[5]
+
+        if winner_id == player1_id:
+            st.write(f"✅ {player1_name} defeated {player2_name}")
+        elif winner_id == player2_id:
+            st.write(f"✅ {player2_name} defeated {player1_name}")
+        else:
+            st.write(f"• {player1_name} vs {player2_name}")
+
+    if standings:
+        leader = standings[0]
+        st.write(
+            f"**Current Leader:** {leader['name']} "
+            f"({leader['wins']}-{leader['losses']})"
+        )
+
+    st.caption(f"Reported matches: {len(completed_matches)}/{len(matches)}")
+
 # --------------------
 # LOGIN SCREEN
 # --------------------
@@ -258,6 +309,7 @@ if is_admin():
         "Import Packs",
         "My Collection",
         "Deckbuilder",
+        "League",
         "Pack History",
         "Admin Tools",
     ])
@@ -267,6 +319,7 @@ else:
         "Import Packs",
         "My Collection",
         "Deckbuilder",
+        "League",
         "Pack History",
     ])
 
@@ -316,6 +369,8 @@ with tabs[0]:
         for week, schedule in PACK_SCHEDULE.items():
             st.write(f"Week {week}: {schedule}")
 
+st.divider()
+render_dashboard_league_summary()
 
 # --------------------
 # IMPORT PACKS
@@ -377,10 +432,23 @@ with tabs[3]:
     )
 
 # --------------------
-# PACK HISTORY
+# LEAGUE
 # --------------------
 
 with tabs[4]:
+    render_league_page(
+        player_id=player_id,
+        is_admin=is_admin(),
+        get_setting=get_setting,
+        conn=conn,
+        c=c,
+    )
+
+# --------------------
+# PACK HISTORY
+# --------------------
+
+with tabs[5]:
     render_pack_history_page(
         player_id=player_id,
         c=c,
@@ -392,7 +460,7 @@ with tabs[4]:
 # --------------------
 
 if is_admin():
-    with tabs[5]:
+    with tabs[6]:
         render_admin_page(
             get_setting=get_setting,
             set_setting=set_setting,
