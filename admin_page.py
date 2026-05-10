@@ -61,6 +61,82 @@ def render_admin_page(
 
     st.divider()
 
+    st.subheader("Admin Reset Player Data")
+
+    players = c.execute("""
+        SELECT player_id, player_name
+        FROM players
+        ORDER BY player_id
+    """).fetchall()
+
+    player_options = {
+        f"{player_name} (ID {player_id})": player_id
+        for player_id, player_name in players
+    }
+
+    selected_player_label = st.selectbox(
+        "Select player to reset",
+        list(player_options.keys()),
+        key="admin_reset_player_select"
+    )
+
+    selected_player_id = player_options[selected_player_label]
+
+    reset_collection = st.checkbox(
+        "Reset collection",
+        key="admin_reset_collection"
+    )
+
+    reset_imports = st.checkbox(
+        "Reset imported pack history",
+        key="admin_reset_imports"
+    )
+
+    reset_deck = st.checkbox(
+        "Reset saved deck",
+        key="admin_reset_deck"
+    )
+
+    confirm_player_reset = st.checkbox(
+        "I understand this will permanently delete the selected player data",
+        key="admin_confirm_player_reset"
+    )
+
+    if st.button("Reset Selected Player Data", key="admin_reset_player_data"):
+        if not confirm_player_reset:
+            st.error("Check the confirmation box first.")
+        elif not reset_collection and not reset_imports and not reset_deck:
+            st.error("Choose at least one reset option.")
+        else:
+            if reset_collection:
+                c.execute(
+                    "DELETE FROM collection WHERE player_id = ?",
+                    (selected_player_id,)
+                )
+
+            if reset_imports:
+                c.execute(
+                    "DELETE FROM imported_boosters WHERE player_id = ?",
+                    (selected_player_id,)
+                )
+                c.execute(
+                    "DELETE FROM booster_cards WHERE player_id = ?",
+                    (selected_player_id,)
+                )
+
+            if reset_deck:
+                c.execute(
+                    "DELETE FROM deck_cards WHERE player_id = ?",
+                    (selected_player_id,)
+                )
+
+            conn.commit()
+            st.success(f"Reset selected data for {selected_player_label}.")
+            st.rerun()
+
+    st.divider()
+
+
     st.subheader("League Dashboard Settings")
 
     current_week = int(get_setting("current_week", "1"))
